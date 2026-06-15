@@ -16,3 +16,5 @@ class Config:
         self.SALON_WORK_HOURS = os.getenv("SALON_WORK_HOURS","10:00-21:00")
         self.MIN_HOURS_BEFORE_BOOKING = int(os.getenv("MIN_HOURS_BEFORE_BOOKING","2"))
         self.MAX_DAYS_BOOKING = int(os.getenv("MAX_DAYS_BOOKING","14"))
+        self.WORK_START_HOUR = int(os.getenv("WORK_START_HOUR", "8"))
+        self.WORK_END_HOUR = int(os.getenv("WORK_END_HOUR", "22"))

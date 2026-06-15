@@ -40,31 +40,27 @@ def get_masters_keyboard(masters):
     b.adjust(1)
     return b.as_markup()
 
-def get_month_calendar(year: int, month: int, selected_date: str = None):
-    """Календарь на месяц с кнопками навигации"""
+def get_month_calendar(year: int, month: int, selected_date: str = None, end_date=None):
+    """Календарь на месяц. Даты позже end_date помечаются ❌ (недоступны)."""
     b = InlineKeyboardBuilder()
     mn = ["Январь","Февраль","Март","Апрель","Май","Июнь",
           "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"]
-    
-    # Кнопки переключения месяцев
     prev_month = month - 1 if month > 1 else 12
     prev_year = year if month > 1 else year - 1
     next_month = month + 1 if month < 12 else 1
     next_year = year if month < 12 else year + 1
-    
-    b.button(text="◀️", callback_data=f"cal_prev_{year}_{month}")
-    b.button(text=f"{mn[month-1]} {year}", callback_data="cal_ignore")
-    b.button(text="▶️", callback_data=f"cal_next_{year}_{month}")
-    b.adjust(3)
-    
-    # Дни недели
-    for d in ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]:
-        b.button(text=d, callback_data="cal_ignore")
-    b.adjust(7)
-    
+
+    b.row(
+        InlineKeyboardButton(text="◀️", callback_data=f"cal_prev_{year}_{month}"),
+        InlineKeyboardButton(text=f"{mn[month-1]} {year}", callback_data="cal_ignore"),
+        InlineKeyboardButton(text="▶️", callback_data=f"cal_next_{year}_{month}")
+    )
+
     cal = calendar.monthcalendar(year, month)
     today = datetime.now().date()
-    
+    # Если end_date не задан, берём от today + MAX_DAYS_BOOKING (или просто большое число)
+    # но мы будем получать его из booking.py
+
     for week in cal:
         row = []
         for day in week:
@@ -72,8 +68,9 @@ def get_month_calendar(year: int, month: int, selected_date: str = None):
                 row.append(InlineKeyboardButton(text=" ", callback_data="cal_ignore"))
             else:
                 dt = datetime(year, month, day).date()
-                if dt < today:
-                    row.append(InlineKeyboardButton(text=f"❌{day}", callback_data="cal_ignore"))
+                # Проверка: прошедшая дата или дальше ограничения
+                if dt < today or (end_date and dt > end_date):
+                    row.append(InlineKeyboardButton(text="❌", callback_data="cal_ignore"))
                 else:
                     date_str = dt.strftime("%Y-%m-%d")
                     if date_str == selected_date:
@@ -81,8 +78,8 @@ def get_month_calendar(year: int, month: int, selected_date: str = None):
                     else:
                         row.append(InlineKeyboardButton(text=str(day), callback_data=f"date_{date_str}"))
         b.row(*row)
-    
-    b.button(text="◀️ Назад", callback_data="back_to_masters")
+
+    b.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_masters"))
     return b.as_markup()
 
 def get_confirmation_keyboard():

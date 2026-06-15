@@ -15,6 +15,9 @@ admin_sessions = {}
 from datetime import datetime
 from sqlalchemy import select, and_
 from bot.models.database import Appointment
+import asyncio
+class AdminBroadcast(StatesGroup):
+    waiting_text = State()
 class AdminAuth(StatesGroup):
     waiting_login = State()
     waiting_password = State()
@@ -61,6 +64,7 @@ def get_admin_menu():
     b.button(text="📅 Записи", callback_data="adm_appointments")
     b.button(text="💬 Изменить контакт Telegram", callback_data="adm_edit_contact")
     b.button(text="⚙️ Настройки", callback_data="adm_settings")
+    b.button(text="📢 Рассылка", callback_data="adm_broadcast")
     b.button(text="🚪 Выйти", callback_data="adm_logout")
     b.adjust(1)
     return b.as_markup()
@@ -873,3 +877,53 @@ async def adm_save_contact(message: Message, state: FSMContext, db):
     await db.set_setting("admin_contact", message.text.strip().replace("@", ""))
     await message.answer("✅ Контакт обновлён!", reply_markup=get_admin_menu())
     await state.clear()
+
+@admin_router.callback_query(F.data == "adm_broadcast")
+async def adm_broadcast_start(callback: CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        return
+    await state.set_state(AdminBroadcast.waiting_text)
+    await callback.message.edit_text(
+        "📢 <b>РАССЫЛКА</b>\n\n"
+        "Введите текст сообщения, которое будет отправлено всем пользователям бота.\n"
+        "Для отмены нажмите /start",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="◀️ Отмена", callback_data="adm_back")]
+        ])
+    )
+    await callback.answer()
+
+@admin_router.message(StateFilter(AdminBroadcast.waiting_text))
+async def adm_broadcast_send(message: Message, state: FSMContext, db):
+    if not is_admin(message.from_user.id):
+        await state.clear()
+        return
+
+    text = message.text.strip()
+    if not text:
+        await message.answer("❌ Текст не может быть пустым.")
+        return
+
+    await state.clear()
+    await message.answer("⏳ Начинаю рассылку...")
+
+    users = await db.get_all_users()
+    sent = 0
+    blocked = 0
+
+    for u in users:
+        if not u.telegram_id:
+            continue
+        try:
+            await message.bot.send_message(chat_id=u.telegram_id, text=text)
+            sent += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            blocked += 1
+
+    await message.answer(
+        f"✅ Рассылка завершена\n\n"
+        f"📨 Отправлено: <b>{sent}</b>\n"
+        f"🚫 Не доставлено: <b>{blocked}</b>",
+        reply_markup=get_admin_menu()
+    )
